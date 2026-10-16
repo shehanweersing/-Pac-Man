@@ -463,37 +463,92 @@ class AStarFoodSearchAgent(SearchAgent):
         self.searchFunction = lambda prob: search.aStarSearch(prob, foodHeuristic)
         self.searchType = FoodSearchProblem
 
-def foodHeuristic(state: Tuple[Tuple, List[List]], problem: FoodSearchProblem):
-    """
-    Your heuristic for the FoodSearchProblem goes here.
 
-    This heuristic must be consistent to ensure correctness.  First, try to come
-    up with an admissible heuristic; almost all admissible heuristics will be
-    consistent as well.
+def foodHeuristic(state, problem):
+    """Consistent heuristic using maze distances and MST."""
 
-    If using A* ever finds a solution that is worse uniform cost search finds,
-    your heuristic is *not* consistent, and probably not admissible!  On the
-    other hand, inadmissible or inconsistent heuristics may find optimal
-    solutions, so be careful.
+    from collections import deque
 
-    The state is a tuple ( pacmanPosition, foodGrid ) where foodGrid is a Grid
-    (see game.py) of either True or False. You can call foodGrid.asList() to get
-    a list of food coordinates instead.
-
-    If you want access to info like walls, capsules, etc., you can query the
-    problem.  For example, problem.walls gives you a Grid of where the walls
-    are.
-
-    If you want to *store* information to be reused in other calls to the
-    heuristic, there is a dictionary called problem.heuristicInfo that you can
-    use. For example, if you only want to count the walls once and store that
-    value, try: problem.heuristicInfo['wallCount'] = problem.walls.count()
-    Subsequent calls to this heuristic can access
-    problem.heuristicInfo['wallCount']
-    """
     position, foodGrid = state
-    "*** YOUR CODE HERE ***"
-    return 0
+    foods = foodGrid.asList()
+
+    if not foods:
+        return 0
+
+    # Cache shortest-path distances from food positions
+    distanceCache = problem.heuristicInfo.setdefault(
+        "distanceCache", {}
+    )
+
+    # Cache MST costs for sets of remaining food
+    mstCache = problem.heuristicInfo.setdefault(
+        "mstCache", {}
+    )
+
+    def distancesFrom(source):
+        if source not in distanceCache:
+            distances = {source: 0}
+            queue = deque([source])
+
+            while queue:
+                x, y = queue.popleft()
+
+                for dx, dy in [(1, 0), (-1, 0),
+                               (0, 1), (0, -1)]:
+
+                    nextPos = (x + dx, y + dy)
+
+                    if (not problem.walls[nextPos[0]][nextPos[1]]
+                            and nextPos not in distances):
+
+                        distances[nextPos] = distances[(x, y)] + 1
+                        queue.append(nextPos)
+
+            distanceCache[source] = distances
+
+        return distanceCache[source]
+
+    # Actual maze distances to remaining food
+    foodDistances = [
+        distancesFrom(food)[position]
+        for food in foods
+    ]
+
+    farthestDistance = max(foodDistances)
+    nearestDistance = min(foodDistances)
+
+    # Minimum Spanning Tree over remaining food
+    foodKey = frozenset(foods)
+
+    if foodKey not in mstCache:
+        first = foods[0]
+
+        bestEdges = {
+            food: distancesFrom(first)[food]
+            for food in foods[1:]
+        }
+
+        mstCost = 0
+
+        while bestEdges:
+            nextFood = min(bestEdges, key=bestEdges.get)
+            mstCost += bestEdges.pop(nextFood)
+
+            newDistances = distancesFrom(nextFood)
+
+            for food in bestEdges:
+                bestEdges[food] = min(
+                    bestEdges[food],
+                    newDistances[food]
+                )
+
+        mstCache[foodKey] = mstCost
+
+    return max(
+        farthestDistance,
+        nearestDistance + mstCache[foodKey]
+    )
+
 
 class ClosestDotSearchAgent(SearchAgent):
     "Search for all food using a sequence of searches"
