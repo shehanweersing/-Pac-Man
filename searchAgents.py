@@ -333,9 +333,9 @@ class CornersProblem(search.SearchProblem):
                 else:
                     nextVisited = visitedCorners
 
-            nextState = (nextPosition, nextVisited)
+                nextState = (nextPosition, nextVisited)
 
-            successors.append((nextState, action, 1))
+                successors.append((nextState, action, 1))
 
         self._expanded += 1
         return successors
